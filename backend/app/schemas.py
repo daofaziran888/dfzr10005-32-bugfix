@@ -28,6 +28,23 @@ class EntryPayload(BaseModel):
     remark: str | None = None
 
 
+class ActionPayload(EntryPayload):
+    """动作入参：兼容 ``{"action": ...}`` 顶层写法与 ``{"values": {"action": ...}}`` 旧写法。
+
+    调整基线时还可以平铺携带新承诺时间、预警窗口、幂等请求号与期望版本号，
+    这些字段一并交给 service 判定，路由层不做业务判断。
+    """
+
+    model_config = {"extra": "allow"}
+
+    def fields(self) -> dict[str, Any]:
+        merged = dict(self.model_extra or {})
+        merged.update(self.values)
+        if self.remark is not None:
+            merged.setdefault("remark", self.remark)
+        return merged
+
+
 
 class LifecycleEntry(BaseModel):
     """生命周期策略明细结构。"""

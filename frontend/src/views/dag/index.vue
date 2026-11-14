@@ -70,16 +70,16 @@ import { request } from '@/api/client'
 type Row = Record<string, string | number | null>
 
 const ENDPOINT = '/api/dag'
-const columns = ["节点编号", "节点名称", "上游节点", "下游节点", "执行条件", "超时分钟", "失败策略", "节点状态"]
+const columns = ["节点编号", "节点名称", "上游节点", "下游节点", "节点状态", "基线编号", "承诺时间", "预警时间", "风险窗口", "关键路径版本", "最近产出", "核对结果"]
 const actions = ["启动节点", "暂停节点", "归档节点"]
 const statuses = ["草稿", "运行中", "已暂停", "已完成"]
-const stats = [{"label": "依赖图节点总数", "value": 0}, {"label": "运行中节点", "value": 0}, {"label": "已暂停节点", "value": 0}]
+const stats = ref([{"label": "依赖图节点总数", "value": 0}, {"label": "运行中节点", "value": 0}, {"label": "已暂停节点", "value": 0}])
 
 const rows = ref<Row[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
-const filterFields = columns.slice(0, 3)
+const filterFields = columns.slice(0, 2)
 
 function resetFilters() {
   filters.value = {}
@@ -87,7 +87,9 @@ function resetFilters() {
 }
 
 function exportRows() {
-  window.open(`${ENDPOINT}/export`, '_blank')
+  const query = new URLSearchParams({ format: 'csv', download: 'true' })
+  if (filters.value['节点编号']) query.set('keyword', filters.value['节点编号'])
+  window.open(`${ENDPOINT}/export?${query.toString()}`, '_blank')
 }
 
 function openCreate() {
@@ -112,15 +114,21 @@ async function runAction(action: string, row: Row) {
 
 async function reload() {
   errorMessage.value = ''
-  const query = new URLSearchParams(filters.value as Record<string, string>).toString()
+  const query = new URLSearchParams()
+  if (filters.value['节点编号']) query.set('keyword', filters.value['节点编号'])
   try {
-    const response = await request(`${ENDPOINT}?${query}`)
+    const response = await request(`${ENDPOINT}?${query.toString()}`)
     if (!response.ok) {
       throw new Error('依赖图节点列表读取失败')
     }
     const payload = await response.json()
     rows.value = payload.items ?? []
     total.value = payload.total ?? rows.value.length
+    stats.value = [
+      { label: '依赖图节点总数', value: total.value },
+      { label: '运行中节点', value: rows.value.filter((row) => row.status === '运行中').length },
+      { label: '已暂停节点', value: rows.value.filter((row) => row.status === '已暂停').length },
+    ]
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '任务依赖编排列表读取失败'
   }

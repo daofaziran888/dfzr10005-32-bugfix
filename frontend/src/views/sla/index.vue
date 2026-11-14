@@ -70,16 +70,16 @@ import { request } from '@/api/client'
 type Row = Record<string, string | number | null>
 
 const ENDPOINT = '/api/sla'
-const columns = ["规则编号", "监控对象", "产出时间", "延迟阈值", "告警级别", "通知渠道", "升级策略", "规则状态"]
+const columns = ["规则编号", "监控对象", "产出时间", "延迟阈值", "规则状态", "基线编号", "承诺时间", "预警时间", "风险窗口", "最晚处置时刻", "关键路径版本", "核对结果"]
 const actions = ["启用监控", "处理告警", "关闭规则"]
 const statuses = ["草稿", "监控中", "已触发", "已关闭"]
-const stats = [{"label": "SLA规则总数", "value": 0}, {"label": "监控中规则", "value": 0}, {"label": "已触发规则", "value": 0}]
+const stats = ref([{"label": "SLA规则总数", "value": 0}, {"label": "监控中规则", "value": 0}, {"label": "已触发规则", "value": 0}])
 
 const rows = ref<Row[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
-const filterFields = columns.slice(0, 3)
+const filterFields = columns.slice(0, 2)
 
 function resetFilters() {
   filters.value = {}
@@ -87,7 +87,9 @@ function resetFilters() {
 }
 
 function exportRows() {
-  window.open(`${ENDPOINT}/export`, '_blank')
+  const query = new URLSearchParams({ format: 'csv', download: 'true' })
+  if (filters.value['规则编号']) query.set('keyword', filters.value['规则编号'])
+  window.open(`${ENDPOINT}/export?${query.toString()}`, '_blank')
 }
 
 function openCreate() {
@@ -112,15 +114,21 @@ async function runAction(action: string, row: Row) {
 
 async function reload() {
   errorMessage.value = ''
-  const query = new URLSearchParams(filters.value as Record<string, string>).toString()
+  const query = new URLSearchParams()
+  if (filters.value['规则编号']) query.set('keyword', filters.value['规则编号'])
   try {
-    const response = await request(`${ENDPOINT}?${query}`)
+    const response = await request(`${ENDPOINT}?${query.toString()}`)
     if (!response.ok) {
       throw new Error('SLA规则列表读取失败')
     }
     const payload = await response.json()
     rows.value = payload.items ?? []
     total.value = payload.total ?? rows.value.length
+    stats.value = [
+      { label: 'SLA规则总数', value: total.value },
+      { label: '监控中规则', value: rows.value.filter((row) => row.status === '监控中').length },
+      { label: '已触发规则', value: rows.value.filter((row) => row.status === '已触发').length },
+    ]
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'SLA告警管理列表读取失败'
   }
